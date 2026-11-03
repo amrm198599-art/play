@@ -1,4 +1,4 @@
-name: Universal Android Build
+name: Unzip and Build Android App
 
 on:
   push:
@@ -19,35 +19,47 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build APK and AAB (Universal Handler)
+      - name: Extract Zip and Build
         run: |
-          echo "🔍 Searching for project root..."
-          GRADLEW_FILE=$(find . -name "gradlew" -maxdepth 4)
+          echo "=== 1. Looking for zip file ==="
+          ZIP_FILE=$(find . -name "*.zip" -maxdepth 2)
+          
+          if [ -z "$ZIP_FILE" ]; then
+            echo "❌ Error: No zip file found!"
+            exit 1
+          fi
+          
+          echo "📂 Found zip file: $ZIP_FILE"
+          mkdir -p extracted_project
+          unzip -q "$ZIP_FILE" -d extracted_project
+          
+          echo "=== 2. Locating gradlew in extracted files ==="
+          GRADLEW_FILE=$(find extracted_project -name "gradlew" -maxdepth 4)
           
           if [ -z "$GRADLEW_FILE" ]; then
-            echo "❌ Error: gradlew not found! Please check your folder structure."
+            echo "❌ Error: gradlew not found inside the zip!"
             exit 1
           fi
           
           PROJECT_DIR=$(dirname "$GRADLEW_FILE")
-          echo "📂 Project found at: $PROJECT_DIR"
+          echo "✅ Project directory is: $PROJECT_DIR"
           
           cd "$PROJECT_DIR"
           chmod +x gradlew
           
-          echo "🚀 Starting Gradle Build (Debug APK & AAB)..."
-          # استخدام --stacktrace لطباعة تفاصيل أي خطأ برمجي بوضوح إذا حدث
-          ./gradlew assembleDebug bundleDebug --stacktrace
+          echo "=== 3. Building APK & AAB ==="
+          ./gradlew assembleDebug
+          ./gradlew bundleDebug
           
           echo "PROJECT_PATH=$PROJECT_DIR" >> $GITHUB_ENV
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-apk
           path: ${{ env.PROJECT_PATH }}/app/build/outputs/apk/debug/*.apk
 
-      - name: Upload AAB
+      - name: Upload AAB Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-aab
