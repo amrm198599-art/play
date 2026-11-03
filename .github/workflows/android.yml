@@ -19,7 +19,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Extract Zip and Build
+      - name: Extract Zip and Inspect Contents
         run: |
           echo "=== 1. Looking for zip file ==="
           ZIP_FILE=$(find . -name "*.zip" -maxdepth 2)
@@ -33,16 +33,19 @@ jobs:
           mkdir -p extracted_project
           unzip -q "$ZIP_FILE" -d extracted_project
           
-          echo "=== 2. Locating gradlew in extracted files ==="
-          GRADLEW_FILE=$(find extracted_project -name "gradlew" -maxdepth 4)
+          echo "=== 2. Inspecting extracted contents ==="
+          ls -la extracted_project
+          
+          # البحث عن gradlew في كل المجلدات المستخرجة
+          GRADLEW_FILE=$(find extracted_project -name "gradlew" -maxdepth 5)
           
           if [ -z "$GRADLEW_FILE" ]; then
-            echo "❌ Error: gradlew not found inside the zip!"
+            echo "❌ Error: gradlew is still not found inside the extracted folders. Please check your zip contents."
             exit 1
           fi
           
           PROJECT_DIR=$(dirname "$GRADLEW_FILE")
-          echo "✅ Project directory is: $PROJECT_DIR"
+          echo "✅ Found project directory at: $PROJECT_DIR"
           
           cd "$PROJECT_DIR"
           chmod +x gradlew
