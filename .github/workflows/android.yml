@@ -19,21 +19,36 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Grant execute permission and Build
+      - name: Auto-locate project and Build APK & AAB
         run: |
-          cd PlayCheck
+          echo "Searching for gradlew in repository..."
+          GRADLEW_FILE=$(find . -name "gradlew" -maxdepth 3)
+          
+          if [ -z "$GRADLEW_FILE" ]; then
+            echo "Error: gradlew file not found anywhere!"
+            exit 1
+          fi
+          
+          PROJECT_DIR=$(dirname "$GRADLEW_FILE")
+          echo "Found project at directory: $PROJECT_DIR"
+          
+          cd "$PROJECT_DIR"
           chmod +x gradlew
+          
+          # بناء APK و AAB
           ./gradlew assembleDebug
           ./gradlew bundleDebug
+          
+          echo "PROJECT_PATH=$PROJECT_DIR" >> $GITHUB_ENV
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-apk
-          path: PlayCheck/app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_PATH }}/app/build/outputs/apk/debug/*.apk
 
-      - name: Upload AAB
+      - name: Upload AAB Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-aab
-          path: PlayCheck/app/build/outputs/bundle/debug/*.aab
+          path: ${{ env.PROJECT_PATH }}/app/build/outputs/bundle/debug/*.aab
