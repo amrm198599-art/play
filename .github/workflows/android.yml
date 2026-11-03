@@ -1,4 +1,4 @@
-name: Ultimate Android Build Workflow
+name: Build Android App
 
 on:
   push:
@@ -19,38 +19,26 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Auto-locate Project and Build
+      - name: Auto-locate Project and Build APK & AAB
         run: |
-          echo "=== 1. Searching for Gradle wrapper (gradlew) ==="
+          echo "=== Searching for gradlew ==="
           GRADLEW_FILE=$(find . -name "gradlew" -maxdepth 4)
           
           if [ -z "$GRADLEW_FILE" ]; then
-            echo "❌ Error: gradlew file not found! Please make sure your project files are uploaded correctly in the repository."
+            echo "❌ Error: gradlew file not found!"
             exit 1
           fi
           
           PROJECT_DIR=$(dirname "$GRADLEW_FILE")
-          echo "✅ Found project directory at: $PROJECT_DIR"
+          echo "✅ Found project at: $PROJECT_DIR"
           
           cd "$PROJECT_DIR"
           chmod +x gradlew
           
-          echo "=== 2. Building Debug APK ==="
-          ./gradlew assembleDebug --stacktrace || {
-            echo "❌ APK Build Failed! Checking details..."
-            exit 1
-          }
+          echo "=== Building APK & AAB ==="
+          ./gradlew assembleDebug
+          ./gradlew bundleDebug
           
-          echo "=== 3. Building Debug AAB (App Bundle) ==="
-          ./gradlew bundleDebug --stacktrace || {
-            echo "❌ AAB Build Failed! Checking details..."
-            exit 1
-          }
-          
-          # حفظ المسار للاستخدام في خطوة الرفع
           echo "PROJECT_PATH=$PROJECT_DIR" >> $GITHUB_ENV
 
       - name: Upload APK Artifact
