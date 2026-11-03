@@ -30,9 +30,19 @@ jobs:
 
       - name: Find project (unzip if needed)
         run: |
-          if [ -f PlayCheck.zip ]; then unzip -qo PlayCheck.zip -d build_src; fi
-          SETTINGS=$(find . -name 'settings.gradle*' -print -quit)
-          [ -n "$SETTINGS" ] || { echo "settings.gradle not found"; exit 1; }
+          mkdir -p build_src
+          for pass in 1 2; do
+            find . -name '*.zip' -not -path './.git/*' | while read -r z; do
+              echo "Unzipping $z"; unzip -qo "$z" -d build_src
+            done
+          done
+          SETTINGS=$(find . -name 'settings.gradle*' -not -path './.git/*' -print -quit)
+          if [ -z "$SETTINGS" ]; then
+            echo "settings.gradle not found. Repo contents:"
+            find . -maxdepth 3 -not -path './.git/*' | head -60
+            exit 1
+          fi
+          echo "Project: $SETTINGS"
           echo "PROJECT_DIR=$(cd "$(dirname "$SETTINGS")" && pwd)" >> "$GITHUB_ENV"
 
       - name: Prepare signing (only if secrets exist)
@@ -45,4 +55,24 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$PROJECT_DIR/upload-key.jks"
             printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
-              "$PROJECT_DIR/upload-key.jks" "$KEYSTORE_PASS
+              "$PROJECT_DIR/upload-key.jks" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" \
+              > "$PROJECT_DIR/keystore.properties"
+          fi
+
+      - name: Build APK and AAB
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: '**/build/outputs/apk/**/*.apk'
+          if-no-files-found: error
+
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab
+          path: '**/build/outputs/bundle/**/*.aab'
+          if-no-files-found: error
