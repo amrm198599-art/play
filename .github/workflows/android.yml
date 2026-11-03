@@ -1,14 +1,13 @@
-name: Unzip and Build Android App
+name: Build Android App
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -16,54 +15,53 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Extract Zip and Inspect Contents
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Find project (unzip if needed)
         run: |
-          echo "=== 1. Looking for zip file ==="
-          ZIP_FILE=$(find . -name "*.zip" -maxdepth 2)
-          
-          if [ -z "$ZIP_FILE" ]; then
-            echo "❌ Error: No zip file found!"
-            exit 1
+          if [ -f PlayCheck.zip ]; then unzip -qo PlayCheck.zip -d build_src; fi
+          SETTINGS=$(find . -name 'settings.gradle*' -print -quit)
+          [ -n "$SETTINGS" ] || { echo "settings.gradle not found"; exit 1; }
+          echo "PROJECT_DIR=$(cd "$(dirname "$SETTINGS")" && pwd)" >> "$GITHUB_ENV"
+
+      - name: Prepare signing (only if secrets exist)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$PROJECT_DIR/upload-key.jks"
+            printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$PROJECT_DIR/upload-key.jks" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" \
+              > "$PROJECT_DIR/keystore.properties"
           fi
-          
-          echo "📂 Found zip file: $ZIP_FILE"
-          mkdir -p extracted_project
-          unzip -q "$ZIP_FILE" -d extracted_project
-          
-          echo "=== 2. Inspecting extracted contents ==="
-          ls -la extracted_project
-          
-          # البحث عن gradlew في كل المجلدات المستخرجة
-          GRADLEW_FILE=$(find extracted_project -name "gradlew" -maxdepth 5)
-          
-          if [ -z "$GRADLEW_FILE" ]; then
-            echo "❌ Error: gradlew is still not found inside the extracted folders. Please check your zip contents."
-            exit 1
-          fi
-          
-          PROJECT_DIR=$(dirname "$GRADLEW_FILE")
-          echo "✅ Found project directory at: $PROJECT_DIR"
-          
-          cd "$PROJECT_DIR"
-          chmod +x gradlew
-          
-          echo "=== 3. Building APK & AAB ==="
-          ./gradlew assembleDebug
-          ./gradlew bundleDebug
-          
-          echo "PROJECT_PATH=$PROJECT_DIR" >> $GITHUB_ENV
+
+      - name: Build APK and AAB
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-apk
-          path: ${{ env.PROJECT_PATH }}/app/build/outputs/apk/debug/*.apk
+          name: apk
+          path: '**/build/outputs/apk/**/*.apk'
+          if-no-files-found: error
 
       - name: Upload AAB Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-aab
-          path: ${{ env.PROJECT_PATH }}/app/build/outputs/bundle/debug/*.aab
+          name: aab
+          path: '**/build/outputs/bundle/**/*.aab'
+          if-no-files-found: error
