@@ -1,4 +1,4 @@
-name: Build Android App
+name: Universal Android Build
 
 on:
   push:
@@ -19,35 +19,35 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Auto-locate Project and Build APK & AAB
+      - name: Build APK and AAB (Universal Handler)
         run: |
-          echo "=== Searching for gradlew ==="
+          echo "🔍 Searching for project root..."
           GRADLEW_FILE=$(find . -name "gradlew" -maxdepth 4)
           
           if [ -z "$GRADLEW_FILE" ]; then
-            echo "❌ Error: gradlew file not found!"
+            echo "❌ Error: gradlew not found! Please check your folder structure."
             exit 1
           fi
           
           PROJECT_DIR=$(dirname "$GRADLEW_FILE")
-          echo "✅ Found project at: $PROJECT_DIR"
+          echo "📂 Project found at: $PROJECT_DIR"
           
           cd "$PROJECT_DIR"
           chmod +x gradlew
           
-          echo "=== Building APK & AAB ==="
-          ./gradlew assembleDebug
-          ./gradlew bundleDebug
+          echo "🚀 Starting Gradle Build (Debug APK & AAB)..."
+          # استخدام --stacktrace لطباعة تفاصيل أي خطأ برمجي بوضوح إذا حدث
+          ./gradlew assembleDebug bundleDebug --stacktrace
           
           echo "PROJECT_PATH=$PROJECT_DIR" >> $GITHUB_ENV
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-apk
           path: ${{ env.PROJECT_PATH }}/app/build/outputs/apk/debug/*.apk
 
-      - name: Upload AAB Artifact
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: app-aab
